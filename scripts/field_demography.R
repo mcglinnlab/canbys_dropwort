@@ -4,7 +4,7 @@
 library(ggplot2)
 
 #' load data
-dat <- read.csv('../data/canbys_data - field.csv')
+dat <- read.csv('./data/canbys_data - field.csv')
 
 #' examine data
 head(dat)
@@ -19,13 +19,13 @@ t.test(ht_cm.1 ~ wetland, data = dat)
 ht_avg <- with(dat, tapply(ht_cm.1, wetland, mean, na.rm = TRUE))
 ht_sd <- with(dat, tapply(ht_cm.1, wetland, sd, na.rm = TRUE))
 ht_n <- with(dat, tapply(ht_cm.1, wetland, function(x) sum(!is.na(x))))
-ht_se <- ht_sd / ht_n
+ht_se <- ht_sd / sqrt(ht_n)
 
 #pdf('./figs/ht_vs_trt.pdf')
-ht_plt <- barplot(ht_avg, width = 0.25, ylim = c(0, 20), 
+ht_plt <- barplot(ht_avg, width = 0.25, ylim = c(0, 25), 
                   ylab = 'Plant height (cm)', col = 'lightgreen')
 arrows(ht_plt, ht_avg - (ht_se * 1.96), y1 = ht_avg + (ht_se * 1.96),
-       angle = 90, code = 3, length = 0.1)
+       angle = 90, code = 3, length = 0.1, lwd=2)
 #dev.off()
 
 gr <- dat$ht_cm.1 - dat$ht_cm
@@ -38,7 +38,7 @@ t.test(gr ~ wetland, data = dat)
 gr_avg <- with(dat, tapply(gr, wetland, mean, na.rm = TRUE))
 gr_sd <- with(dat, tapply(gr, wetland, sd, na.rm = TRUE))
 gr_n <- with(dat, tapply(gr, wetland, function(x) sum(!is.na(x))))
-gr_se <- gr_sd / gr_n
+gr_se <- gr_sd / sqrt(gr_n)
 
 #pdf('./figs/gr_vs_trt.pdf')
 gr_plt <- barplot(gr_avg, width = 0.25, ylim = c(0, 3), 
