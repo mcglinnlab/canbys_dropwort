@@ -4,7 +4,7 @@
 library(ggplot2)
 
 #' load data
-dat <- read.csv('./data/canbys_data - field.csv')
+dat <- read.csv('../data/canbys_data - field.csv')
 
 #' examine data
 head(dat)
