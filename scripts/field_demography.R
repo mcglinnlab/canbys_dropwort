@@ -435,7 +435,8 @@ for (i in seq_along(uni_plant_ids)) {
   
 }
 end_date <- as.Date(end_date)
-end_date <- ifelse(is.infinite(end_date), )
+end_date <- as.Date(ifelse(is.infinite(end_date), min(survey_dates), end_date))
+end_date
 #end_date <- as.Date(ifelse(end_date == max_date,  # if alive at last survey then  
 #                           end_date,              # last observed is last survey
 #                           survey_dates[match(end_date, survey_dates) + 1])) # if not then go one more date prior
@@ -444,17 +445,92 @@ end_date <- ifelse(is.infinite(end_date), )
 dat_surv <- data.frame(plant_id3 = uni_plant_ids, 
                        plant_date,
                        last_obs = end_date)
-dat_surv$Age <- dat_surv$last_obs - dat_surv$plant_date
-dat_surv$status <- with(dat, ifelse(end_date == max_date, 1, 0))
+dat_surv$age <- dat_surv$last_obs - dat_surv$plant_date
+dat_surv$status <- with(dat, ifelse(end_date == max_date, 0, 1)) # 0 = alive, 1 = dead
 
 head(dat_surv)
-with(dat_surv, Surv(plant_date, end_date))
+
+# merge in acilitory data
+dat_surv <- dplyr::left_join(dat_surv, 
+               dat[ , c('plant_id3', 'wetland', 'loc', 'water_depth_fixed', 'soil_moist_fixed')])
+
+
+out0 <- survfit(Surv(age, status) ~ 1, data=dat_surv)
+names(out0)
+plot(out0, ylab="S(t)", xlab="t")
+
+out1 <- survfit(Surv(age, status) ~ wetland, data=dat_surv)
+plot(out1, ylab="S(t)", xlab="t", col = 1:2)
+out1$strata
+out1$surv
+
+#indicator variable for each habitat
+wetland <- rep(c('burned', 'mowed'), out1$strata)
+
+#graph separate KM survivor functions by habitat with confidence bands
+plot(out1, col=c('red', 'blue'), ylab="S(t)", xlab="t")
+
+#confidence bands for burned
+lines(out1$time[wetland == 'burned'],
+      out1$lower[wetland == 'burned'],
+      col='tomato', lty=2, type='s')
+lines(out1$time[wetland == 'burned'], 
+      out1$upper[wetland == 'burned'],
+      col='tomato', lty=2, type='s')
+#confidence bands for mowed
+lines(out1$time[wetland == 'mowed'],
+      out1$lower[wetland == 'mowed'],
+      col='dodgerblue', lty=2, type='s')
+lines(out1$time[wetland == 'mowed'], 
+      out1$upper[wetland == 'mowed'],
+      col='dodgerblue', lty=2, type='s')
+legend('topright', c('burned', 'mowed'), col=c('red','blue'), 
+       lty=1, cex=0.9, bty='n')
+
+# as expected wetland status doesn't matter much
+
+out3.cox <- coxph(Surv(age, status) ~ factor(wetland) + soil_moist_fixed,
+                  data=dat_surv)
+summary(out3.cox)
+coef(out3.cox)
+
+#formal test of proportional hazards assumption
+out.zph <- cox.zph(out3.cox)
+out.zph
+
+#see if coefficients vary with time
+par(mfrow=c(1,2))
+plot(out.zph[1])
+plot(out.zph[2])
+par(mfrow=c(1,1))
 
 
 
-# first need to go through the dataset and see 
+#logrank test: emphasizes late survival
+out1.diff1 <- survdiff(Surv(age, status) ~ wetland, data = dat_surv)
+out1.diff1
+out1.diff1 <- survdiff(Surv(age, status) ~ wetland, data = dat_surv,rho=0)
+out1.diff1
+
+#Gehan-Wilcoxon variation of logrank test: emphasizes early survival
+survdiff(Surv(age,status)~ wetland,data = dat_surv, rho=1)->out1.diff2
+out1.diff2
+
+#weights intermediate survival times the most
+survdiff(Surv(age,status)~ wetland,data = dat_surv, rho=.5)->out1.diff3
+out1.diff3
 
 
+#cox model with habitat code as predictor
+coxph(Surv(age,status)~factor(wetland), data = dat_surv)->out1.cox
+summary(out1.cox)
+coef(out1.cox)
+
+#hazard ratio for burned versus wetland
+exp(-coef(out1.cox))
+
+#sequential likelihood ratio test
+anova(out1.cox)
 
 
 
