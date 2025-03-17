@@ -7,6 +7,10 @@ library(patchwork)
 library(tidyr)
 library(pdp)
 library(marginaleffects)
+library(survival)
+library(contsurvplot)
+library(riskRegression)
+library(pammtools)
 
 pseudo_r2 <- function(glm_mod) {
   1 -  glm_mod$deviance / glm_mod$null.deviance
@@ -451,16 +455,21 @@ dat_surv$status <- with(dat, ifelse(end_date == max_date, 0, 1)) # 0 = alive, 1 
 head(dat_surv)
 
 # merge in acilitory data
+vars_of_interest <- c('plant_id3', 'wetland', 'loc', 'water_depth_fixed', 'soil_moist_fixed',
+                      'len_0618')
 dat_surv <- dplyr::left_join(dat_surv, 
-               dat[ , c('plant_id3', 'wetland', 'loc', 'water_depth_fixed', 'soil_moist_fixed')])
-
+                             dat[ , vars_of_interest])
 
 out0 <- survfit(Surv(age, status) ~ 1, data=dat_surv)
 names(out0)
 plot(out0, ylab="S(t)", xlab="t")
 
 out1 <- survfit(Surv(age, status) ~ wetland, data=dat_surv)
-plot(out1, ylab="S(t)", xlab="t", col = 1:2)
+plot(out1, ylab="Probability of Survival S(t)", 
+     xlab="Days since planting",
+     col = c('red', 'blue'), lwd = 2)
+legend('bottomright', c('burned', 'mowed'), col = c('red', 'blue'),
+       lwd = 2, bty = 'n')
 out1$strata
 out1$surv
 
@@ -489,14 +498,66 @@ legend('topright', c('burned', 'mowed'), col=c('red','blue'),
 
 # as expected wetland status doesn't matter much
 
-out3.cox <- coxph(Surv(age, status) ~ factor(wetland) + soil_moist_fixed,
+out3.cox <- coxph(Surv(age, status) ~ factor(wetland) + soil_moist_fixed + len_0618,
                   data=dat_surv)
 summary(out3.cox)
 coef(out3.cox)
 
+anova(out3.cox)
+
 #formal test of proportional hazards assumption
 out.zph <- cox.zph(out3.cox)
 out.zph
+
+
+tmp <- dat_surv
+tmp$age <- as.numeric(tmp$age)
+tmp$wetland <- as.factor(tmp$wetland)
+# Note: wetland by starting length interaction
+# is statistically supported but not really visible in graph
+out3.cox <- coxph(Surv(age, status) ~ wetland + len_0618 + soil_moist_fixed ,
+                  data=tmp, x=TRUE)
+# soil moisture
+plot_surv_area(time="age",
+               status="status",
+               variable="soil_moist_fixed",
+               data=tmp,
+               model=out3.cox, 
+               start_color = 'tomato',
+               end_color = 'dodgerblue',
+               legend.title = expression('Soil Moisture ('*m^3/m^3*')'),
+               xlab = 'Days Since Planting',
+               kaplan_meier=TRUE, km_size = 1.5)
+
+plot_surv_contour(time="age",
+                  status="status",
+                  variable="soil_moist_fixed",
+                  data=tmp,
+                  model=out3.cox, 
+                  xlab = 'Days Since Planting',
+                  ylab = expression('Soil Moisture ('*m^3/m^3*')'))
+# initial size
+plot_surv_area(time="age",
+               status="status",
+               variable="len_0618",
+               data=tmp,
+               model=out3.cox, 
+               start_color = 'tomato',
+               end_color = 'dodgerblue',
+               legend.title = 'Starting Stem \nLength (cm)',
+               xlab = 'Days Since Planting',
+               kaplan_meier=TRUE, km_size = 1.5)
+
+plot_surv_contour(time="age",
+                  status="status",
+                  variable="len_0618",
+                  data=tmp,
+                  model=out3.cox, 
+                  ylab = 'Starting Stem Length (cm)',
+                  xlab = 'Days Since Planting')
+
+
+
 
 #see if coefficients vary with time
 par(mfrow=c(1,2))
